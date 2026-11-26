@@ -40,7 +40,7 @@ La app fija el contexto RLS con `set_config(..., true)` dentro de una transacci�
 
 ## Correr en local
 
-Requisitos: Node 22 y PostgreSQL 16 con un rol **sin** superusuario.
+Requisitos: Node 22 y PostgreSQL 16 con un rol **sin** superusuario ni BYPASSRLS.
 
 ```bash
 cp .env.example .env      # completa DATABASE_URL y SESSION_SECRET
@@ -51,6 +51,15 @@ npm run dev
 ```
 
 Usuarios de demo (contraseña `trux1234`): `empresa@trux.demo`, `conductor@trux.demo`.
+
+## Despliegue (Vercel + Neon)
+
+1. Crea una base en Neon y aplica las migraciones con el rol dueño: `MIGRATION_DATABASE_URL=... npm run db:migrate`.
+2. Crea el rol de la app, sin BYPASSRLS: `psql "$MIGRATION_DATABASE_URL" -v app_password="'...'" -f prisma/sql/app-role.sql`.
+   El rol por defecto de Neon puede saltarse RLS; por eso la app nunca lo usa.
+3. Carga la demo: `DATABASE_URL=<url de trux_app> npm run db:seed`.
+4. Importa el repo en Vercel con `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SESSION_SECRET` y `CRON_SECRET`.
+   El build (`vercel-build`) aplica migraciones pendientes y un cron diario reinicia la demo.
 
 ## Pruebas
 
