@@ -1,0 +1,113 @@
+// Modelo de datos de TRUX.
+// Toda tabla de negocio lleva company_id: es la llave del aislamiento por RLS
+// (ver prisma/migrations/*_rls/migration.sql).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Los dos roles de TRUX: la empresa gestiona, el conductor opera sus viajes.
+enum Role {
+  EMPRESA
+  CONDUCTOR
+}
+
+enum TripStatus {
+  PROGRAMADO
+  EN_CURSO
+  COMPLETADO
+}
+
+model Company {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users         User[]
+  vehicles      Vehicle[]
+  trips         Trip[]
+  statusChanges TripStatusChange[]
+
+  @@map("companies")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @map("company_id") @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  drivenTrips   Trip[]             @relation("TripDriver")
+  statusChanges TripStatusChange[]
+
+  @@index([companyId])
+  @@map("users")
+}
+
+model Vehicle {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  plate      String
+  model      String
+  capacityKg Int?     @map("capacity_kg")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  trips   Trip[]
+
+  @@unique([companyId, plate])
+  @@map("vehicles")
+}
+
+model Trip {
+  id                 String     @id @default(uuid()) @db.Uuid
+  companyId          String     @map("company_id") @db.Uuid
+  origin             String
+  destination        String
+  vehicleId          String     @map("vehicle_id") @db.Uuid
+  driverId           String     @map("driver_id") @db.Uuid
+  status             TripStatus @default(PROGRAMADO)
+  scheduledDeparture DateTime   @map("scheduled_departure")
+  expectedArrival    DateTime   @map("expected_arrival")
+  startedAt          DateTime?  @map("started_at")
+  completedAt        DateTime?  @map("completed_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle            @relation(fields: [vehicleId], references: [id])
+  driver        User               @relation("TripDriver", fields: [driverId], references: [id])
+  statusChanges TripStatusChange[]
+
+  @@index([companyId, status])
+  @@index([driverId])
+  @@map("trips")
+}
+
+/// Auditoría: solo se inserta; RLS no permite UPDATE ni DELETE.
+model TripStatusChange {
+  id          String      @id @default(uuid()) @db.Uuid
+  companyId   String      @map("company_id") @db.Uuid
+  tripId      String      @map("trip_id") @db.Uuid
+  changedById String      @map("changed_by_id") @db.Uuid
+  fromStatus  TripStatus? @map("from_status")
+  toStatus    TripStatus  @map("to_status")
+  note        String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  trip      Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  changedBy User    @relation(fields: [changedById], references: [id])
+
+  @@index([tripId, createdAt])
+  @@map("trip_status_changes")
+}

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Rol sin privilegios de superusuario para que RLS se aplique de verdad.
+      DATABASE_URL: postgresql://trux:trux@localhost:5432/trux
+      SESSION_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Crear rol y base de la app
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE ROLE trux LOGIN PASSWORD 'trux' CREATEDB"
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE trux OWNER trux"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm run test:db
+      - run: npm run build
