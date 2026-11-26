@@ -12,7 +12,8 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma migrate deploy && next build"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
